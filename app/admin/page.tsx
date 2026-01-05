@@ -194,8 +194,16 @@ export default function AdminPage() {
     await loadAssignments(selectedUser.id);
   }
 
-  async function generateAI() {
+   async function generateAI() {
     if (!selectedUser) return;
+
+    // ✅ TS fix: me potrebbe essere null (anche se in UI non succede)
+    const meId = me?.id;
+    if (!meId) {
+      setToast("Sessione non valida. Fai logout/login e riprova.");
+      return;
+    }
+
     setSaving(true);
     setToast(null);
     try {
@@ -204,6 +212,7 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goal: aiGoal, level: aiLevel }),
       });
+
       const json = await res.json();
       if (!json?.workout || !json?.nutrition) throw new Error("AI response non valida");
 
@@ -211,9 +220,10 @@ export default function AdminPage() {
       const wTitle = String(json.workout.title || "Scheda AI").slice(0, 140);
       const { data: wPlan, error: wErr } = await supabase
         .from("workout_plans")
-        .insert({ title: wTitle, notes: json.workout.notes || null, created_by: me.id })
+        .insert({ title: wTitle, notes: json.workout.notes || null, created_by: meId }) // ✅ QUI
         .select("id")
         .single();
+
       if (wErr) throw new Error(wErr.message);
 
       const wItems: any[] = [];
@@ -240,9 +250,10 @@ export default function AdminPage() {
       const nTitle = String(json.nutrition.title || "Piano AI").slice(0, 140);
       const { data: nPlan, error: nErr } = await supabase
         .from("nutrition_plans")
-        .insert({ title: nTitle, notes: json.nutrition.notes || null, created_by: me.id })
+        .insert({ title: nTitle, notes: json.nutrition.notes || null, created_by: meId }) // ✅ QUI
         .select("id")
         .single();
+
       if (nErr) throw new Error(nErr.message);
 
       const nItems: any[] = [];
@@ -270,6 +281,7 @@ export default function AdminPage() {
       await supabase
         .from("user_workout_plans")
         .upsert({ user_id: selectedUser.id, workout_plan_id: wPlan.id });
+
       await supabase
         .from("user_nutrition_plans")
         .upsert({ user_id: selectedUser.id, nutrition_plan_id: nPlan.id });
@@ -282,7 +294,6 @@ export default function AdminPage() {
       setSaving(false);
     }
   }
-
   async function logout() {
     await supabase.auth.signOut();
     r.replace("/");
